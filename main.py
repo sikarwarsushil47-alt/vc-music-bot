@@ -14,23 +14,32 @@ assistant = Client(SESSION, api_id=API_ID, api_hash=API_HASH)
 
 call = PyTgCalls(assistant)
 
-def download(url):
+def search_or_download(query):
     ydl_opts = {
         "format": "bestaudio",
         "outtmpl": "song.%(ext)s",
         "quiet": True,
+        "noplaylist": True,
     }
+
+    # If not a link → search YouTube
+    if not query.startswith("http"):
+        query = f"ytsearch:{query}"
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-    return "song.webm"
+        info = ydl.extract_info(query, download=True)
+        if "entries" in info:
+            info = info["entries"][0]
+
+    return "song.webm", info["title"]
 
 @bot.on_message(filters.command("play"))
 async def play(_, message):
     if len(message.command) < 2:
-        return await message.reply("Give YouTube link")
+        return await message.reply("Give song name or YouTube link")
 
-    url = message.command[1]
-    file = download(url)
+    query = " ".join(message.command[1:])
+    file, title = search_or_download(query)
 
     await assistant.join_chat(message.chat.id)
 
@@ -39,13 +48,13 @@ async def play(_, message):
         AudioPiped(file)
     )
 
-    await message.reply("▶️ Playing")
+    await message.reply(f"▶️ Playing: {title}")
 
 async def main():
     await bot.start()
     await assistant.start()
     await call.start()
-    print("Bot running")
+    print("Smart VC Bot Running")
     await asyncio.Event().wait()
 
 asyncio.run(main())
